@@ -7,7 +7,7 @@ How to use:
 
 using NReco.Logging.File;
 
-services.AddLogging(loggingBuilder => {
+services.AddLogging(loggingBuilder =&gt; {
 	loggingBuilder.AddFile("app.log", append:true);
 });
 

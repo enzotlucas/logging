@@ -29,7 +29,7 @@ namespace NReco.Logging.File {
 	/// Generic file logger provider.
 	/// </summary>
 	[ProviderAlias("File")]
-	public class FileLoggerProvider : ILoggerProvider {
+	public class FileLoggerProvider : ILoggerProvider, ISupportExternalScope {
 
 		private string LogFileName;
 
@@ -40,6 +40,8 @@ namespace NReco.Logging.File {
 		private readonly FileWriter fWriter;
 
 		internal FileLoggerOptions Options { get; private set; }
+
+		private IExternalScopeProvider scopeProvider = new LoggerExternalScopeProvider();
 
 		private bool Append => Options.Append;
 		private long FileSizeLimitBytes => Options.FileSizeLimitBytes;
@@ -99,31 +101,39 @@ namespace NReco.Logging.File {
 				TaskCreationOptions.LongRunning);
 		}
 
+		/// <inheritdoc />
+		public void SetScopeProvider(IExternalScopeProvider scopeProvider) {
+			this.scopeProvider = scopeProvider;
+		}
+
+		/// <inheritdoc />
 		public ILogger CreateLogger(string categoryName) {
 			return loggers.GetOrAdd(categoryName, CreateLoggerImplementation);
 		}
 
+		/// <inheritdoc />
 		public void Dispose() {
 			entryQueue.CompleteAdding();
 			try {
 				processQueueTask.Wait(1500);  // the same as in ConsoleLogger
-			} catch (TaskCanceledException) { 
-			} catch (AggregateException ex) when (ex.InnerExceptions.Count == 1 && ex.InnerExceptions[0] is TaskCanceledException) { }
+			}
+			catch (TaskCanceledException) { }
+			catch (AggregateException ex) when (ex.InnerExceptions.Count == 1 && ex.InnerExceptions[0] is TaskCanceledException) { }
 
 			loggers.Clear();
 			fWriter.Close();
 		}
 
 		private FileLogger CreateLoggerImplementation(string name) {
-			return new FileLogger(name, this);
+			return new FileLogger(name, this, scopeProvider);
 		}
 
 		internal void WriteEntry(string message) {
 			if (!entryQueue.IsAddingCompleted) {
 				try {
 					entryQueue.Add(message);
-					return;
-				} catch (InvalidOperationException) { }
+				}
+				catch (InvalidOperationException) { }
 			}
 			// do nothing
 		}
@@ -133,7 +143,8 @@ namespace NReco.Logging.File {
 				try {
 					if (!writeMessageFailed)
 						fWriter.WriteMessage(message, entryQueue.Count == 0);
-				} catch (Exception ex) {
+				}
+				catch (Exception ex) {
 					// something goes wrong. App's code can handle it if 'HandleFileError' is provided
 					var stopLogging = true;
 					if (HandleFileError != null) {
@@ -146,7 +157,8 @@ namespace NReco.Logging.File {
 								fWriter.WriteMessage(message, entryQueue.Count == 0);
 								stopLogging = false;
 							}
-						} catch {
+						}
+						catch {
 							// exception is possible in HandleFileError or if proposed file name cannot be used
 							// let's ignore it in that case -> file logger will stop processing log messages
 						}
@@ -199,14 +211,17 @@ namespace NReco.Logging.File {
 									.OrderByDescending(fInfo => fInfo.Name)
 									.OrderByDescending(fInfo => fInfo.LastWriteTime).First();
 							LogFileName = lastFileInfo.FullName;
-						} else {
+						}
+						else {
 							// no files yet, use default name
 							LogFileName = baseLogFileName;
 						}
-					} else {
+					}
+					else {
 						LogFileName = baseLogFileName;
 					}
-				} else {
+				}
+				else {
 					LogFileName = baseLogFileName;
 				}
 			}
@@ -220,7 +235,8 @@ namespace NReco.Logging.File {
 				LogFileStream = new FileStream(LogFileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read);
 				if (append) {
 					LogFileStream.Seek(0, SeekOrigin.End);
-				} else {
+				}
+				else {
 					LogFileStream.SetLength(0); // clear the file
 				}
 				LogFileWriter = new StreamWriter(LogFileStream);
@@ -235,7 +251,8 @@ namespace NReco.Logging.File {
 			void OpenFile(bool append) {
 				try {
 					createLogFileStream(append);
-				} catch (Exception ex) {
+				}
+				catch (Exception ex) {
 					if (FileLogPrv.HandleFileError != null) {
 						var fileErr = new FileError(LogFileName, ex);
 						FileLogPrv.HandleFileError(fileErr);
@@ -260,13 +277,13 @@ namespace NReco.Logging.File {
 
 				switch (FileLogPrv.Options.RollingFilesConvention) {
 					case FileLoggerOptions.FileRollingConvention.Ascending:
-							//Unchanged default handling just optimized for performance and code reuse
-							int currentFileIndex = GetIndexFromFile(baseLogFileName, LogFileName);
-							var nextFileIndex = currentFileIndex + 1;
-							if (FileLogPrv.MaxRollingFiles > 0) {
-								nextFileIndex %= FileLogPrv.MaxRollingFiles;
-							}
-							return GetFileFromIndex(baseLogFileName, nextFileIndex);
+						//Unchanged default handling just optimized for performance and code reuse
+						int currentFileIndex = GetIndexFromFile(baseLogFileName, LogFileName);
+						var nextFileIndex = currentFileIndex + 1;
+						if (FileLogPrv.MaxRollingFiles > 0) {
+							nextFileIndex %= FileLogPrv.MaxRollingFiles;
+						}
+						return GetFileFromIndex(baseLogFileName, nextFileIndex);
 					case FileLoggerOptions.FileRollingConvention.AscendingStableBase: {
 							//Move current base file to next rolling file number
 							RollingNumber++;

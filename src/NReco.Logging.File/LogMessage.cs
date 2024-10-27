@@ -19,12 +19,39 @@ using Microsoft.Extensions.Logging;
 
 namespace NReco.Logging.File {
 
+	/// <summary>
+	/// Logger message 
+	/// </summary>
 	public struct LogMessage {
+		/// <summary>
+		/// Log name
+		/// </summary>
 		public readonly string LogName;
+		/// <summary>
+		/// Log message
+		/// </summary>
 		public readonly string Message;
+		/// <summary>
+		/// Log level
+		/// </summary>
 		public readonly LogLevel LogLevel;
+		/// <summary>
+		/// Event ID
+		/// </summary>
 		public readonly EventId EventId;
+		/// <summary>
+		/// Log exception
+		/// </summary>
 		public readonly Exception Exception;
+		/// <summary>
+		/// Current logging scope
+		/// </summary>
+		public readonly IReadOnlyCollection<object> Scope;
+		/// <summary>
+		/// Collection of Key/Value pairs assigned to the current scope
+		/// </summary>
+		public readonly IDictionary<string, object> ScopeArgs;
+		internal List<object> ScopeList => (List<object>)Scope;
 
 		internal LogMessage(string logName, LogLevel level, EventId eventId, string message, Exception ex) {
 			LogName = logName;
@@ -32,6 +59,8 @@ namespace NReco.Logging.File {
 			LogLevel = level;
 			EventId = eventId;
 			Exception = ex;
+			Scope = new List<object>();
+			ScopeArgs = new Dictionary<string, object>();
 		}
 
 	}
